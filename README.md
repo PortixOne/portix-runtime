@@ -1,30 +1,31 @@
-> **This repository is a read-only mirror. Development happens in [PortixOne/portixone](https://github.com/portixhq/portixone).**
-
 # Portix Runtime
 
-> The local bridge that lets web apps talk to printers, cash drawers, scales, and other hardware — without fighting the browser.
+Headless local bridge (Node.js + TypeScript). Listens on `localhost:<port>` (see `.env.example`), accepts print jobs over HTTP, and reports live status over WebSocket.
 
-Part of [PortixOne](https://github.com/portixhq/portixone), a secure edge runtime connecting web apps to local hardware.
+## Running in development
 
----
+```bash
+npm run dev
+```
 
-This repo exists so the runtime is discoverable and browsable on its own — **it will not `npm install`/build standalone**, since it depends on `@portixone/protocol`, `@portixone/shared`, and `@portixone/escpos`, which live in the monorepo.
+First run generates `.data/config.json` with an auto-generated local `apiKey` (or picks up `PORTIX_LOCAL_API_KEY` from the environment) and `.data/runtime.log`. Both are gitignored.
 
-To actually run it: clone [`portixone`](https://github.com/portixhq/portixone) and follow the [`runtime/README.md`](https://github.com/portixhq/portixone/tree/master/runtime) there.
+## Endpoints
 
----
+- `GET /health` → bridge status
+- `POST /print` → requires `x-portix-api-key` header, body `{ content, printerName?, copies? }`
+- WebSocket (same root) → `status`, `job:queued`, `job:printed`, `job:error` events
 
-## What it does
+## Printer drivers
 
-- Accepts print jobs over a local HTTP API (`POST /print`) and reports live status over WebSocket.
-- Detects installed printers on Windows.
-- Validates every request with a local API key — no cloud dependency required to print.
-- Currently MVP scope: **Windows, local printing only**. Cash drawer, scales, and other device capabilities are on the roadmap.
+Set `PORTIX_PRINTER_DRIVER` in `.env` (see `.env.example`):
 
-## Architecture
+- `mock` (default) — logs the job as printed, no hardware needed. Good for developing without a printer attached.
+- `network` — sends raw ESC/POS bytes to an Ethernet/WiFi thermal printer's raw port (`PORTIX_NETWORK_PRINTER_HOST` / `PORTIX_NETWORK_PRINTER_PORT`, default `9100`). Pure Node `net` socket, no native dependencies. Verified byte-for-byte against a local test listener.
+- `windows-spooler` — sends raw ESC/POS bytes to a USB thermal printer installed as a named Windows printer (`PORTIX_DEFAULT_PRINTER`, or per-request `printerName`), via `winspool.drv` through a PowerShell P/Invoke helper (`scripts/send-raw-print.ps1`) — no node-gyp / native addon required. Verified that the script compiles and error-handles correctly; **physical print output has not yet been verified against a real ESC/POS printer** — do that before relying on this in production.
 
-Config, Logger, Auth, Security, Storage, Protocol adapter/validator, HTTP + WebSocket API, Printer Manager (detectors + drivers), Queue Manager — see [`src/`](src) for the full module layout.
+Both real drivers build their byte stream with `packages/escpos`.
 
-## License
+## Module status
 
-MIT — see [`portixone`](https://github.com/portixhq/portixone) for the canonical license file.
+**Future capability managers** (not implemented, not even as empty folders, by design — off-limits in the first 90 days): USB Manager, Bluetooth Manager, TCP Manager, Serial Manager, Driver Registry, Updater. These get added once the roadmap reaches cash drawer/scales/other devices.
